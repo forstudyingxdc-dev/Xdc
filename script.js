@@ -20,6 +20,13 @@ function goStep(stepId) {
   }
 }
 
+function stopCameraStream() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+}
+
 async function requestFrontCamPermission() {
   const permErr = document.getElementById("permErr");
   permErr.textContent = "";
@@ -91,6 +98,19 @@ function updateMemoryCount(count) {
   }
 }
 
+function exitHorrorFullscreen() {
+  const horrorVideo = document.getElementById("horrorVideo");
+  if (horrorVideo) {
+    horrorVideo.pause();
+    horrorVideo.currentTime = 0;
+    horrorVideo.classList.remove("active-horror-video");
+  }
+
+  if (document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
 async function openHorror(answer) {
   goStep("step-horror");
 
@@ -102,8 +122,12 @@ async function openHorror(answer) {
 
   photoBox.style.display = "none";
   label.textContent = `Son suala cavabınız: ${answer}`;
-  camInfo.textContent = "Ön kamera hazırlanır...";
+  camInfo.textContent = "Reaksiya çəkilir...";
 
+  stopCameraStream();
+  clearTimeout(snapTimer);
+
+  horrorVideo.loop = false;
   horrorVideo.classList.add("active-horror-video");
   horrorVideo.currentTime = 0;
   horrorVideo.muted = false;
@@ -115,17 +139,6 @@ async function openHorror(answer) {
     await horrorVideo.play().catch(() => {});
   }
 
-  if (horrorVideo.requestFullscreen) {
-    horrorVideo.requestFullscreen().catch(() => {});
-  } else if (horrorVideo.webkitEnterFullscreen) {
-    try {
-      horrorVideo.webkitEnterFullscreen();
-    } catch (e) {}
-  }
-
-  stopCameraStream();
-  clearTimeout(snapTimer);
-
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
@@ -134,31 +147,23 @@ async function openHorror(answer) {
 
     frontCam.srcObject = cameraStream;
     await frontCam.play();
-
-    camInfo.textContent = "Reaksiya anı izlənilir...";
-
-    snapTimer = setTimeout(() => {
-      takeSnapshot(frontCam, answer);
-    }, HORROR_DURATION_MS);
   } catch (err) {
     camInfo.textContent = "Kamera açılmadı və ya icazə verilmədi.";
   }
-}
 
-function exitHorrorFullscreen() {
-  const horrorVideo = document.getElementById("horrorVideo");
-  if (horrorVideo) {
-    horrorVideo.classList.remove("active-horror-video");
-    horrorVideo.pause();
-  }
-
-  if (document.fullscreenElement && document.exitFullscreen) {
-    document.exitFullscreen().catch(() => {});
-  }
+  snapTimer = setTimeout(() => {
+    takeSnapshot(frontCam, answer);
+  }, HORROR_DURATION_MS);
 }
 
 function takeSnapshot(videoEl, answer) {
-  if (!videoEl || videoEl.readyState < 2) return;
+  exitHorrorFullscreen();
+
+  if (!videoEl || videoEl.readyState < 2) {
+    stopCameraStream();
+    camInfo.textContent = "Kamera kadrı alınmadı.";
+    return;
+  }
 
   const canvas = document.getElementById("snapCanvas");
   const photoBox = document.getElementById("photoResultBox");
@@ -172,8 +177,6 @@ function takeSnapshot(videoEl, answer) {
   ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
 
   const imageDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-
-  exitHorrorFullscreen();
 
   capturedPhoto.src = imageDataUrl;
   photoBox.style.display = "block";
@@ -232,7 +235,7 @@ function renderMemory() {
             Tarix: ${dateStr}<br/>
             Qalan vaxt: ~${remainingDays} gün
           </div>
-          <button class="del-btn" onclick="deleteMemoryItem('${item.id}')">Sil</button>
+          <button type="button" class="del-btn" onclick="deleteMemoryItem('${item.id}')">Sil</button>
         </div>
       `;
     })
@@ -284,4 +287,3 @@ function escapeHtml(str) {
 }
 
 getActiveMemory();
-  
